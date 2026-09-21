@@ -365,10 +365,11 @@ function loadChecks(){try{return JSON.parse(localStorage.getItem(KEY))||{}}catch
 function saveChecks(o){try{localStorage.setItem(KEY,JSON.stringify(o))}catch(e){}}
 var checks=loadChecks(), total=0;
 
-(function(){
+function buildLists(){
   var root=document.getElementById("lists");
+  root.innerHTML=""; total=0;
   COURSES.forEach(function(co){
-    var rows=co.tasks.map(function(t,i){
+    var rows=(co.tasks||[]).map(function(t,i){
       var id=co.id+"-"+i; total++;
       var on=!!checks[id];
       var tag=t.tag?'<span class="tag">'+t.tag+'</span>':(t.p?'<span class="pts">'+t.p+'</span>':'');
@@ -380,16 +381,35 @@ var checks=loadChecks(), total=0;
     }).join('');
     root.insertAdjacentHTML("beforeend",
       '<div class="course-block '+co.cls+'"><div class="cb-h"><h3>'+co.name+'</h3>'+
-      '<span class="meet">'+co.meet+'</span></div>'+rows+'</div>');
+      '<span class="meet">'+(co.meet||'')+'</span></div>'+rows+'</div>');
   });
-  root.addEventListener("change",function(e){
-    if(e.target.type!=="checkbox")return;
-    var lbl=e.target.closest(".task"),id=lbl.getAttribute("data-id");
-    if(e.target.checked){checks[id]=1;lbl.classList.add("done");}
-    else{delete checks[id];lbl.classList.remove("done");}
-    saveChecks(checks);updateProg();
-  });
+  if(!buildLists._bound){
+    buildLists._bound=true;
+    root.addEventListener("change",function(e){
+      if(e.target.type!=="checkbox")return;
+      var lbl=e.target.closest(".task"),id=lbl.getAttribute("data-id");
+      if(e.target.checked){checks[id]=1;lbl.classList.add("done");}
+      else{delete checks[id];lbl.classList.remove("done");}
+      saveChecks(checks);updateProg();
+    });
+  }
   updateProg();
+}
+/* Live data override: GitHub Action writes assignments.json from Canvas.
+   Falls back to the embedded snapshot above (offline file, or before first run). */
+(function(){
+  function start(){buildLists();}
+  try{
+    fetch("assignments.json",{cache:"no-store"})
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(j){
+        if(j&&j.courses&&j.courses.length)COURSES=j.courses;
+        if(j&&j.updated){var e=document.querySelector(".eyebrow");
+          if(e)e.textContent="Edmonds College · Fall 2026 · Sep 21 – Dec 11 · updated "+j.updated;}
+      })
+      .catch(function(){})
+      .finally(start);
+  }catch(e){start();}
 })();
 
 function updateProg(){
